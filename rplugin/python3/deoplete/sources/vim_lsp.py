@@ -12,7 +12,6 @@ class Source(Base):
         self.mark = '[lsp]'
         self.rank = 500
         self.is_volatile = True
-        self.input_pattern = r'[^\w\s]$'
         self.events = ['BufEnter']
         self.vars = {}
 
@@ -30,6 +29,22 @@ class Source(Base):
     def on_event(self, context):
         if context['event'] == 'BufEnter':
             self.buf_changed = True
+
+    def get_input_pattern(self, filetype):
+        if self.input_pattern or self.input_patterns:
+            return Base.get_input_pattern(self, filetype)
+
+        triggers = []
+        for server_name in self.vim.call('lsp#get_allowed_servers'):
+            if self.vim.call('lsp#get_server_status', server_name) != 'running':
+                continue
+            self.server_capabilities[server_name] = self.vim.call(
+                'lsp#get_server_capabilities', server_name)
+            triggers.extend(self.trigger_characters(server_name))
+
+        if not triggers:
+            return ''
+        return '(?:' + '|'.join(re.escape(char) for char in triggers) + ')$'
 
     def gather_candidates(self, context):
         if not self.server_names or self.buf_changed:
@@ -122,13 +137,11 @@ class Source(Base):
         self.vim.call('deoplete_vim_lsp#log', val)
 
     def trigger_characters(self, server_name):
-        default = ["."]
         capabilities = self.server_capabilities[server_name]
-        if capabilities:
-            trigger_characters = capabilities.get('trigger_characters', [])
-            trigger_characters.extend(default)
-            return trigger_characters
-        return default
+        completion_provider = capabilities.get('completionProvider')
+        if isinstance(completion_provider, dict):
+            return list(completion_provider.get('triggerCharacters', []))
+        return []
 
     def prev_input(self):
         return self.requested_context.get('input', '')
