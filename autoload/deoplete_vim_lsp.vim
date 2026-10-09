@@ -33,9 +33,10 @@ function! s:handle_completion(server, position, complete_position, data) abort
             \ 'response': a:data['response'],
             \ }
         let l:completion = lsp#omni#get_vim_completion_items(l:options)
-        " Deoplete inserts at its keyword start, which may follow an LSP edit's opening quote.
+        " Only remove leading text that Deoplete already keeps before its keyword start.
         let l:offset = max([0, a:complete_position - (l:completion['startcol'] - 1)])
-        let g:deoplete#source#vim_lsp#_items = map(l:completion['items'], 'extend(v:val, {"word": strpart(v:val.word, l:offset)})')
+        let l:prefix = strpart(getline('.'), l:completion['startcol'] - 1, l:offset)
+        let g:deoplete#source#vim_lsp#_items = map(l:completion['items'], 'extend(v:val, {"word": stridx(v:val.word, l:prefix) == 0 ? strpart(v:val.word, l:offset) : v:val.word})')
         let g:deoplete#source#vim_lsp#_incomplete = l:completion['incomplete']
         let g:deoplete#source#vim_lsp#_done = 1
 
