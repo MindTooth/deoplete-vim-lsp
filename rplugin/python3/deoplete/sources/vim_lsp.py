@@ -17,6 +17,7 @@ class Source(Base):
 
         self.vim.vars['deoplete#source#vim_lsp#_items'] = []
         self.vim.vars['deoplete#source#vim_lsp#_done'] = False
+        self.vim.vars['deoplete#source#vim_lsp#_incomplete'] = False
         self.requested = False
         self.requested_context = None
 
@@ -74,6 +75,7 @@ class Source(Base):
     def clean_state(self):
         self.vim.vars['deoplete#source#vim_lsp#_items'] = []
         self.vim.vars['deoplete#source#vim_lsp#_done'] = False
+        self.vim.vars['deoplete#source#vim_lsp#_incomplete'] = False
         self.requested = False
         self.requested_context = None
 
@@ -103,7 +105,9 @@ class Source(Base):
             return []
 
         if self.vim.vars['deoplete#source#vim_lsp#_done']:
-            if self.match_context(context):
+            if self.match_context(context) and (
+                    now_input == self.prev_input() or not
+                    self.vim.vars['deoplete#source#vim_lsp#_incomplete']):
                 items = self.vim.vars['deoplete#source#vim_lsp#_items']
                 return items
             else:
@@ -123,6 +127,7 @@ class Source(Base):
         self.vim.call(
             'deoplete_vim_lsp#request',
             server_name,
+            context['complete_position'],
         )
 
     def is_auto_complete(self):
@@ -176,7 +181,7 @@ class Source(Base):
         ]))
 
         # start input
-        if (not beforeKw) and afterKw:
+        if pattern.sub('', before_context['input']) != pattern.sub('', context['input']):
             return False
         if (beforeKw != afterKw) and (not afterKw.startswith(beforeKw)):
             return False
