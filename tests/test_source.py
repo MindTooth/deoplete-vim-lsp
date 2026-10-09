@@ -34,10 +34,10 @@ class Vim:
             return 0
 
 
-def context(text, line=1):
+def context(text, line=1, bufnr=1):
     return {'input': text, 'position': [0, line, len(text)+1, 0],
             'complete_position': re.search(r'\w*$|$', text).start(),
-            'filetypes': ['json'], 'event': 'TextChangedI'}
+            'bufnr': bufnr, 'filetypes': ['json'], 'event': 'TextChangedI'}
 
 
 class SourceTests(unittest.TestCase):
@@ -56,7 +56,7 @@ class SourceTests(unittest.TestCase):
         self.respond()
         for text in ['  "', '  "m', '  "ma', '  "match']:
             self.assertEqual(self.source.gather_candidates(context(text)), [{'word': 'matchDepTypes"'}])
-        self.assertEqual(self.vim.requests, [('test', 3)])
+        self.assertEqual(self.vim.requests, [('test', 3, 2)])
 
     def test_incomplete_response_refreshes_only_on_changed_input(self):
         self.source.gather_candidates(context('fmt.'))
@@ -79,6 +79,40 @@ class SourceTests(unittest.TestCase):
         self.source.gather_candidates(context('fmt'))
         self.respond()
         self.assertEqual(self.source.gather_candidates(context('fmt.')), [])
+        self.assertEqual(len(self.vim.requests), 2)
+
+    def test_buffer_entry_clears_items_and_invalidates_pending_request(self):
+        self.source.gather_candidates(context('pri'))
+        request_id = self.vim.requests[-1][-1]
+        self.respond()
+        self.source.on_event({'event': 'BufEnter'})
+        self.assertEqual(self.vim.vars['deoplete#source#vim_lsp#_items'], [])
+        self.assertGreater(self.vim.vars['deoplete#source#vim_lsp#_request_id'], request_id)
+        self.assertEqual(self.source.gather_candidates(context('pri', bufnr=2)), [])
+        self.assertEqual(len(self.vim.requests), 2)
+
+    def test_buffer_identity_prevents_reuse_without_event(self):
+        self.source.gather_candidates(context('pri'))
+        self.respond()
+        self.assertEqual(self.source.gather_candidates(context('pri', bufnr=2)), [])
+        self.assertEqual(len(self.vim.requests), 2)
+
+    def test_changed_pending_context_sends_new_request(self):
+        for new_context in [context('other'), context('pr'), context('pri', line=2)]:
+            with self.subTest(context=new_context):
+                self.source.clean_state()
+                self.source.gather_candidates(context('pri'))
+                request_id = self.vim.requests[-1][-1]
+                self.assertEqual(self.source.gather_candidates(new_context), [])
+                self.assertGreater(self.vim.requests[-1][-1], request_id)
+
+    def test_failed_request_retries_when_typing_resumes(self):
+        self.source.gather_candidates(context('pri'))
+        self.respond(incomplete=True)
+        self.vim.vars['deoplete#source#vim_lsp#_items'] = []
+        self.assertEqual(self.source.gather_candidates(context('pri')), [])
+        self.assertEqual(len(self.vim.requests), 1)
+        self.assertEqual(self.source.gather_candidates(context('prin')), [])
         self.assertEqual(len(self.vim.requests), 2)
 
     def test_real_deoplete_minimum_and_trigger_gate(self):

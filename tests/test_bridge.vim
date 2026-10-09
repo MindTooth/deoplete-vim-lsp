@@ -8,12 +8,20 @@ call lsp#register_server({'name': 'test', 'cmd': {s->[]}, 'allowlist': ['json'],
 let s:script = filter(getscriptinfo(), {i,v -> v.name =~ '/autoload/deoplete_vim_lsp.vim$'})[0]
 let s:Handler = function('<SNR>' . s:script.sid . '_handle_completion')
 
+function! s:request(position, complete_position) abort
+  let g:deoplete#source#vim_lsp#_request_id = get(g:, 'deoplete#source#vim_lsp#_request_id', 0) + 1
+  let g:deoplete#source#vim_lsp#_done = 0
+  let g:deoplete#source#vim_lsp#_items = []
+  let g:deoplete#source#vim_lsp#_incomplete = 0
+  return {'id': g:deoplete#source#vim_lsp#_request_id, 'bufnr': bufnr('%'), 'position': a:position, 'complete_position': a:complete_position, 'input': strpart(getline('.'), 0, col('.') - 1)}
+endfunction
+
 function! s:check(line, edit_start, request_col, keyword_byte, expected, incomplete, ...) abort
   call setline(1, a:line)
   call cursor(1, strlen(a:line))
   let item = {'label': 'matchDepTypes', 'insertTextFormat': 2, 'textEdit': {'range': {'start': {'line': 0, 'character': a:edit_start}, 'end': {'line': 0, 'character': a:request_col}}, 'newText': get(a:000, 0, '"matchDepTypes"')}}
   let data = {'response': {'result': {'items': [item], 'isIncomplete': a:incomplete}}}
-  call s:Handler(lsp#get_server_info('test'), {'line': 0, 'character': a:request_col}, a:keyword_byte, data)
+  call s:Handler(lsp#get_server_info('test'), s:request({'line': 0, 'character': a:request_col}, a:keyword_byte), data)
   call assert_equal(a:expected, g:deoplete#source#vim_lsp#_items[0].word)
   call assert_equal(a:incomplete, g:deoplete#source#vim_lsp#_incomplete)
   call assert_equal(1, g:deoplete#source#vim_lsp#_done)
@@ -39,7 +47,7 @@ for item in [
       \ ]
   call setline(1, 'pri ')
   call cursor(1, 4)
-  call s:Handler(lsp#get_server_info('test'), {'line': 0, 'character': 3}, 0, {'response': {'result': [item]}})
+  call s:Handler(lsp#get_server_info('test'), s:request({'line': 0, 'character': 3}, 0), {'response': {'result': [item]}})
   call assert_equal('print', g:deoplete#source#vim_lsp#_items[0].word)
   call assert_equal(0, g:deoplete#source#vim_lsp#_incomplete)
   call assert_equal(item, lsp#omni#get_managed_user_data_from_completed_item(g:deoplete#source#vim_lsp#_items[0]).completion_item)
@@ -52,8 +60,66 @@ let s:items = [
       \ {'label': 'red', 'textEdit': {'range': {'start': {'line': 0, 'character': 0}, 'end': {'line': 0, 'character': 2}}, 'newText': 'red'}},
       \ {'label': 'rgb', 'textEdit': {'range': {'start': {'line': 0, 'character': 1}, 'end': {'line': 0, 'character': 2}}, 'newText': 'rgb'}},
       \ ]
-call s:Handler(lsp#get_server_info('test'), {'line': 0, 'character': 2}, 1, {'response': {'result': {'items': s:items, 'isIncomplete': v:false}}})
+call s:Handler(lsp#get_server_info('test'), s:request({'line': 0, 'character': 2}, 1), {'response': {'result': {'items': s:items, 'isIncomplete': v:false}}})
 call assert_equal(['red', 'rgb'], map(copy(g:deoplete#source#vim_lsp#_items), 'v:val.word'))
+
+" Exercise the real request/timer path without launching a language server.
+execute 'source ' . fnameescape(fnamemodify(expand('<sfile>'), ':p:h') . '/fixtures/autoload/lsp.vim')
+let g:test_lsp_requests = []
+call setline(1, 'pri ')
+call cursor(1, 4)
+let s:old = s:request({'line': 0, 'character': 3}, 0)
+call deoplete_vim_lsp#request('test', 0, s:old.id)
+let s:new = s:request({'line': 0, 'character': 3}, 0)
+call deoplete_vim_lsp#request('test', 0, s:new.id)
+call assert_equal('textDocument/completion', g:test_lsp_requests[1].method)
+call assert_equal({'line': 0, 'character': 3}, g:test_lsp_requests[1].params.position)
+call call(g:test_lsp_requests[0].on_notification, [{'response': {'result': [{'label': 'old'}]}}])
+call assert_equal(0, g:deoplete#source#vim_lsp#_done)
+call call(g:test_lsp_requests[1].on_notification, [{'response': {'result': [{'label': 'new'}]}}])
+call assert_equal('new', g:deoplete#source#vim_lsp#_items[0].word)
+call call(g:test_lsp_requests[0].on_notification, [{'response': {'result': [{'label': 'old'}]}}])
+call assert_equal('new', g:deoplete#source#vim_lsp#_items[0].word)
+
+for data in [{'response': {'error': {'code': -32603, 'message': 'failed'}}}, {}, {'response': {'result': {'items': []}}}]
+  call s:Handler(lsp#get_server_info('test'), s:request({'line': 0, 'character': 3}, 0), data)
+  call assert_equal(1, g:deoplete#source#vim_lsp#_done)
+  call assert_equal([], g:deoplete#source#vim_lsp#_items)
+  call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete)
+endfor
+
+let s:pending = s:request({'line': 0, 'character': 3}, 0)
+call deoplete_vim_lsp#request('test', 0, s:pending.id)
+sleep 1100m
+call assert_equal(1, g:deoplete#source#vim_lsp#_done)
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete)
+call call(g:test_lsp_requests[-1].on_notification, [{'response': {'result': [{'label': 'too_late'}]}}])
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+
+let s:pending = s:request({'line': 0, 'character': 3}, 0)
+noautocmd new
+call setline(1, 'pri ')
+call cursor(1, 4)
+call s:Handler(lsp#get_server_info('test'), s:pending, {'response': {'result': [{'label': 'wrong_buffer'}]}})
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call assert_equal(1, g:deoplete#source#vim_lsp#_done)
+
+let s:pending = s:request({'line': 0, 'character': 3}, 0)
+call setline(1, 'other ')
+call cursor(1, 6)
+call s:Handler(lsp#get_server_info('test'), s:pending, {'response': {'result': [{'label': 'wrong_anchor'}]}})
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+
+" Valid prefix growth still accepts the response to the original request.
+call setline(1, 'pri ')
+call cursor(1, 4)
+let s:pending = s:request({'line': 0, 'character': 3}, 0)
+call setline(1, 'prin ')
+call cursor(1, 5)
+call s:Handler(lsp#get_server_info('test'), s:pending, {'response': {'result': [{'label': 'print'}]}})
+call assert_equal('print', g:deoplete#source#vim_lsp#_items[0].word)
+
 if !empty(v:errors)
   call writefile(v:errors, $LAB . '/bridge-errors.txt')
   cquit
