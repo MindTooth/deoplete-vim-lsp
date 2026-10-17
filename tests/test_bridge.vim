@@ -151,6 +151,7 @@ for grow in [0, 1]
     call setline(2, 'prin tail')
     call cursor(2, 5)
   endif
+  call assert_equal(0, deoplete_vim_lsp#matches_context(bufnr('%'), line('.'), strpart(getline('.'), 0, col('.') - 1)))
   call s:success(s:Callback, 'stale')
   call assert_equal([], g:deoplete#source#vim_lsp#_items)
   call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete)
@@ -254,6 +255,79 @@ call assert_equal('newest', g:deoplete#source#vim_lsp#_items[0].word)
 call s:Finish(s:expired_id, [], 1)
 call assert_equal('newest', g:deoplete#source#vim_lsp#_items[0].word)
 call s:recovered()
+
+" Source and callback share one exact snapshot, including after validated growth.
+for prefix in ['pri', 'pré']
+  call setline(1, ['header', prefix . ' tail'])
+  call cursor(2, strlen(prefix) + 1)
+  let s:Callback = s:start()
+  let s:Captured = get(s:Callback, 'args')[1]
+  for suffix in ['n', 'nt']
+    call setline(2, prefix . suffix . ' tail')
+    call cursor(2, strlen(prefix . suffix) + 1)
+    call assert_equal(1, deoplete_vim_lsp#matches_context(bufnr('%'), 2, prefix . suffix))
+    call assert_equal(['header', prefix . ' tail'], s:Captured.lines)
+    " Repeated polling after growth remains compatible.
+    call assert_equal(1, deoplete_vim_lsp#matches_context(bufnr('%'), 2, prefix . suffix))
+  endfor
+  call s:success(s:Callback, 'print')
+  call assert_equal('print', g:deoplete#source#vim_lsp#_items[0].word)
+  " Completed results also retain the snapshot and reject a later unrelated edit.
+  call assert_equal(1, deoplete_vim_lsp#matches_context(bufnr('%'), 2, prefix . 'nt'))
+  call setline(1, 'changed header')
+  call assert_equal(0, deoplete_vim_lsp#matches_context(bufnr('%'), 2, prefix . 'nt'))
+endfor
+
+" Cursor movement can change the normalized suffix without changing changedtick.
+call setline(1, ['header', 'pri tail'])
+call cursor(2, 4)
+let s:Callback = s:start()
+call setline(2, 'printf tail')
+call cursor(2, 7)
+call assert_equal(1, deoplete_vim_lsp#matches_context(bufnr('%'), 2, 'printf'))
+call cursor(2, 5)
+call assert_equal(0, deoplete_vim_lsp#matches_context(bufnr('%'), 2, 'prin'))
+call s:success(s:Callback, 'stale_cursor')
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+
+" A successful source check cannot hide subsequent stale edits from the callback.
+for change in ['header', 'tail', 'line_count']
+  call setline(1, ['header', 'pri tail'])
+  call cursor(2, 4)
+  let s:Callback = s:start()
+  call setline(2, 'prin tail')
+  call cursor(2, 5)
+  call assert_equal(1, deoplete_vim_lsp#matches_context(bufnr('%'), 2, 'prin'))
+  if change ==# 'header'
+    call setline(1, 'changed header')
+  elseif change ==# 'tail'
+    call setline(2, 'prin changed tail')
+  else
+    call append(2, 'added line')
+  endif
+  call assert_equal(0, deoplete_vim_lsp#matches_context(bufnr('%'), 2, 'prin'))
+  call s:success(s:Callback, 'stale')
+  call assert_equal([], g:deoplete#source#vim_lsp#_items)
+  call s:recovered()
+endfor
+
+" Old transport closures keep their ownership metadata but release buffer contents.
+let s:Callback = s:start()
+let s:Captured = get(s:Callback, 'args')[1]
+call assert_false(empty(s:Captured.lines))
+let s:NewCallback = s:start()
+call assert_equal([], s:Captured.lines)
+call s:success(s:Callback, 'old')
+call assert_equal(0, g:deoplete#source#vim_lsp#_done)
+call s:success(s:NewCallback, 'new')
+call assert_equal('new', g:deoplete#source#vim_lsp#_items[0].word)
+let s:Captured = get(s:NewCallback, 'args')[1]
+let g:deoplete#source#vim_lsp#_request_id += 1
+call deoplete_vim_lsp#clear()
+call assert_equal([], s:Captured.lines)
+call assert_equal(0, deoplete_vim_lsp#matches_context(bufnr('%'), line('.'), 'prin'))
+call s:success(s:NewCallback, 'cleared')
+call assert_equal('new', g:deoplete#source#vim_lsp#_items[0].word)
 
 if !empty(v:errors)
   call writefile(v:errors, $LAB . '/bridge-errors.txt')

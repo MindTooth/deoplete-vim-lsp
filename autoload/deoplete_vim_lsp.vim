@@ -6,7 +6,39 @@ endfunction
 
 let s:timer = -1
 
+function! deoplete_vim_lsp#clear() abort
+    call timer_stop(s:timer)
+    if exists('s:request')
+        " Obsolete callbacks still own this dictionary, but cannot publish results.
+        let s:request.lines = []
+        unlet s:request
+    endif
+endfunction
+
+function! deoplete_vim_lsp#matches_context(bufnr, lnum, input) abort
+    return exists('s:request') && s:matches_context(s:request, a:bufnr, a:lnum, a:input)
+endfunction
+
+function! s:matches_context(request, bufnr, lnum, input) abort
+    if a:bufnr != bufnr('%') || a:bufnr != a:request.bufnr
+        \ || a:lnum != line('.') || a:lnum != a:request.position.line + 1
+        \ || a:input !=# strpart(getline('.'), 0, col('.') - 1)
+        \ || stridx(a:input, a:request.input) != 0
+        return 0
+    endif
+    if b:changedtick != a:request.changedtick
+        " Keep the exact snapshot in Vim; only the validation result crosses RPC.
+        let l:lines = getline(1, '$')
+        let l:lines[a:lnum - 1] = a:request.input . strpart(getline('.'), strlen(a:input))
+        if l:lines !=# a:request.lines
+            return 0
+        endif
+    endif
+    return 1
+endfunction
+
 function! deoplete_vim_lsp#request(server_name, complete_position, request_id) abort
+    call deoplete_vim_lsp#clear()
     let l:server = lsp#get_server_info(a:server_name)
     let l:request = {
         \ 'id': a:request_id,
@@ -17,7 +49,7 @@ function! deoplete_vim_lsp#request(server_name, complete_position, request_id) a
         \ 'changedtick': b:changedtick,
         \ 'lines': getline(1, '$'),
         \ }
-    call timer_stop(s:timer)
+    let s:request = l:request
     let s:timer = timer_start(1000, function('s:finish_request', [a:request_id, [], 1]))
     call lsp#send_request(a:server_name, {
         \ 'method': 'textDocument/completion',
@@ -56,14 +88,9 @@ function! s:handle_completion(server, request, data) abort
             call s:finish_request(a:request.id, [], 1)
             return
         endif
-        if b:changedtick != a:request.changedtick
-            " Permit prefix growth, but reject changes anywhere else in the buffer.
-            let l:lines = getline(1, '$')
-            let l:lines[line('.') - 1] = a:request.input . strpart(getline('.'), col('.') - 1)
-            if l:lines !=# a:request.lines
-                call s:finish_request(a:request.id, [], 1)
-                return
-            endif
+        if !s:matches_context(a:request, bufnr('%'), line('.'), strpart(getline('.'), 0, col('.') - 1))
+            call s:finish_request(a:request.id, [], 1)
+            return
         endif
         let l:result = a:data.response.result
         if l:result isnot v:null && type(l:result) != type([])

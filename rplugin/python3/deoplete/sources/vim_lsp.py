@@ -77,7 +77,7 @@ class Source(Base):
         self.vim.vars['deoplete#source#vim_lsp#_incomplete'] = False
         self.requested = False
         self.requested_context = None
-        self.requested_lines = []
+        self.vim.call('deoplete_vim_lsp#clear')
 
     def sync_completion(self, server_name, context):
         self.request_lsp_completion(server_name, context)
@@ -122,7 +122,6 @@ class Source(Base):
         self.clean_state()
         self.requested = True
         self.requested_context = context
-        self.requested_lines = self.vim.call('getbufline', context['bufnr'], 1, '$')
         self.vim.call(
             'deoplete_vim_lsp#request',
             server_name,
@@ -196,9 +195,7 @@ class Source(Base):
         if context['changedtick'] != before_context['changedtick']:
             # A tick change alone also describes valid prefix growth. Compare the
             # rest of the buffer so edits elsewhere cannot reuse stale results.
-            lines = self.vim.call('getbufline', context['bufnr'], 1, '$')
-            index = context['position'][1] - 1
-            lines[index] = before_context['input'] + lines[index][len(context['input']):]
-            if lines != self.requested_lines:
-                return False
+            return bool(self.vim.call(
+                'deoplete_vim_lsp#matches_context', context['bufnr'],
+                context['position'][1], context['input']))
         return True

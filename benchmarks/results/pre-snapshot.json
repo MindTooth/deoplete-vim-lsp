@@ -1,0 +1,248 @@
+{
+  "root": "/workspace/scratch/pre-snapshot",
+  "python": "3.12.14 (main, Aug 25 2026, 14:00:49) [Clang 22.1.3 ]",
+  "samples": 100,
+  "buffers": [
+    {
+      "lines": 100,
+      "text_bytes": 8127,
+      "timings": {
+        "vim_capture_getline": {
+          "median_ms": 0.0074,
+          "p95_ms": 0.0078
+        },
+        "vim_capture_getbufline": {
+          "median_ms": 0.0077,
+          "p95_ms": 0.0085
+        },
+        "vim_compare": {
+          "median_ms": 0.0061,
+          "p95_ms": 0.0064
+        },
+        "vim_capture_compare": {
+          "median_ms": 0.0121,
+          "p95_ms": 0.0159
+        },
+        "rpc_noop": {
+          "median_ms": 0.1899,
+          "p95_ms": 0.3434
+        },
+        "rpc_snapshot": {
+          "median_ms": 0.24,
+          "p95_ms": 0.3965
+        },
+        "python_compare": {
+          "median_ms": 0.0012,
+          "p95_ms": 0.0012
+        },
+        "source_request": {
+          "median_ms": 1.9931,
+          "p95_ms": 2.1962
+        },
+        "request_response_reuse": {
+          "median_ms": 3.5672,
+          "p95_ms": 3.8359
+        },
+        "prefix_growth_match": {
+          "median_ms": 0.4819,
+          "p95_ms": 0.5598
+        },
+        "repeat_poll_match": {
+          "median_ms": 0.478,
+          "p95_ms": 0.5592
+        },
+        "grown_response_callback": {
+          "median_ms": 0.5329,
+          "p95_ms": 0.6009
+        }
+      },
+      "python_snapshot_bytes": 13047,
+      "vim_rss_20_retained_requests_delta_bytes": 36864,
+      "retained_callbacks": 20,
+      "python_retained_snapshot_bytes": 0,
+      "vim_retained_snapshot_lines": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "lines": 10000,
+      "text_bytes": 819927,
+      "timings": {
+        "vim_capture_getline": {
+          "median_ms": 0.3132,
+          "p95_ms": 0.4025
+        },
+        "vim_capture_getbufline": {
+          "median_ms": 0.3079,
+          "p95_ms": 0.3937
+        },
+        "vim_compare": {
+          "median_ms": 0.1079,
+          "p95_ms": 0.1333
+        },
+        "vim_capture_compare": {
+          "median_ms": 0.735,
+          "p95_ms": 0.8988
+        },
+        "rpc_noop": {
+          "median_ms": 0.2094,
+          "p95_ms": 0.3202
+        },
+        "rpc_snapshot": {
+          "median_ms": 4.5132,
+          "p95_ms": 4.9782
+        },
+        "python_compare": {
+          "median_ms": 0.1081,
+          "p95_ms": 0.1364
+        },
+        "source_request": {
+          "median_ms": 1.4756,
+          "p95_ms": 1.7178
+        },
+        "request_response_reuse": {
+          "median_ms": 2.5897,
+          "p95_ms": 2.9401
+        },
+        "prefix_growth_match": {
+          "median_ms": 0.3782,
+          "p95_ms": 0.4955
+        },
+        "repeat_poll_match": {
+          "median_ms": 0.376,
+          "p95_ms": 0.5177
+        },
+        "grown_response_callback": {
+          "median_ms": 0.3686,
+          "p95_ms": 0.5809
+        }
+      },
+      "python_snapshot_bytes": 1305103,
+      "vim_rss_20_retained_requests_delta_bytes": 0,
+      "retained_callbacks": 20,
+      "python_retained_snapshot_bytes": 0,
+      "vim_retained_snapshot_lines": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "lines": 100000,
+      "text_bytes": 8199927,
+      "timings": {
+        "vim_capture_getline": {
+          "median_ms": 4.2077,
+          "p95_ms": 5.5108
+        },
+        "vim_capture_getbufline": {
+          "median_ms": 3.9304,
+          "p95_ms": 4.4665
+        },
+        "vim_compare": {
+          "median_ms": 1.1266,
+          "p95_ms": 1.3361
+        },
+        "vim_capture_compare": {
+          "median_ms": 10.2646,
+          "p95_ms": 17.0261
+        },
+        "rpc_noop": {
+          "median_ms": 0.1819,
+          "p95_ms": 0.2614
+        },
+        "rpc_snapshot": {
+          "median_ms": 45.2346,
+          "p95_ms": 46.8849
+        },
+        "python_compare": {
+          "median_ms": 1.1824,
+          "p95_ms": 1.4819
+        },
+        "source_request": {
+          "median_ms": 1.8599,
+          "p95_ms": 1.966
+        },
+        "request_response_reuse": {
+          "median_ms": 3.3601,
+          "p95_ms": 3.581
+        },
+        "prefix_growth_match": {
+          "median_ms": 0.3743,
+          "p95_ms": 0.4509
+        },
+        "repeat_poll_match": {
+          "median_ms": 0.3704,
+          "p95_ms": 0.4782
+        },
+        "grown_response_callback": {
+          "median_ms": 0.3779,
+          "p95_ms": 0.5311
+        }
+      },
+      "python_snapshot_bytes": 13000911,
+      "vim_rss_20_retained_requests_delta_bytes": 0,
+      "retained_callbacks": 20,
+      "python_retained_snapshot_bytes": 0,
+      "vim_retained_snapshot_lines": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "nvim": "NVIM v0.11.5"
+}

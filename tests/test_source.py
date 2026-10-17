@@ -18,7 +18,8 @@ class Vim:
         self.vars = {'deoplete#sources#vim_lsp#log': ''}
         self.requests = []
         self.triggers = ['"', ':', '[', '.']
-        self.lines = ['']
+        self.context_matches = True
+        self.context_checks = []
 
     def eval(self, expression):
         assert expression == "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)"
@@ -37,8 +38,11 @@ class Vim:
             return {'auto_complete': True, 'auto_complete_popup': 'auto'}[args[0]]
         if name == 'getbufvar':
             return 0
+        if name == 'deoplete_vim_lsp#matches_context':
+            self.context_checks.append(args)
+            return self.context_matches
         if name == 'getbufline':
-            return self.lines.copy()
+            raise AssertionError('buffer snapshots must stay in Vim')
 
 
 def context(text, line=1, bufnr=1, changedtick=1):
@@ -128,25 +132,26 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(self.source.gather_candidates(context('prin')), [])
         self.assertEqual(len(self.vim.requests), 2)
 
-    def test_changedtick_preserves_only_prefix_growth(self):
+    def test_changedtick_validation_controls_pending_and_cached_reuse(self):
+        # Exact text validation lives in the bridge. Exercise both outcomes here.
         for completed in [False, True]:
-            for lines, text, compatible in [
-                    (['header', 'prin tail'], 'prin', True),
-                    (['changed header', 'pri tail'], 'pri', False),
-                    (['changed header', 'prin tail'], 'prin', False),
-                    (['header', 'prin changed tail'], 'prin', False)]:
-                with self.subTest(completed=completed, lines=lines):
-                    self.source.clean_state()
-                    self.vim.lines = ['header', 'pri tail']
-                    self.source.gather_candidates(context('pri', line=2))
-                    request_id = self.vim.requests[-1][-1]
-                    if completed:
-                        self.respond()
-                    self.vim.lines = lines
-                    result = self.source.gather_candidates(
-                        context(text, line=2, changedtick=3))
-                    self.assertEqual(self.vim.requests[-1][-1] == request_id, compatible)
-                    self.assertEqual(bool(result), completed and compatible)
+            for text in ['pri', 'prin']:
+                for compatible in [False, True]:
+                    with self.subTest(completed=completed, text=text, compatible=compatible):
+                        self.source.clean_state()
+                        self.source.gather_candidates(context('pri', line=2))
+                        request_id = self.vim.requests[-1][-1]
+                        if completed:
+                            self.respond()
+                        checks = len(self.vim.context_checks)
+                        self.source.gather_candidates(context('pri', line=2))
+                        self.assertEqual(len(self.vim.context_checks), checks)
+                        self.vim.context_matches = compatible
+                        result = self.source.gather_candidates(
+                            context(text, line=2, changedtick=3))
+                        self.assertEqual(self.vim.requests[-1][-1] == request_id, compatible)
+                        self.assertEqual(bool(result), completed and compatible)
+                        self.assertEqual(self.vim.context_checks[-1], (1, 2, text))
 
     def test_failed_request_after_pending_growth_retries_immediately(self):
         self.source.gather_candidates(context('pri'))
