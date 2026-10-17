@@ -19,6 +19,10 @@ class Vim:
         self.requests = []
         self.triggers = ['"', ':', '[', '.']
 
+    def eval(self, expression):
+        assert expression == "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)"
+        return self.vars.get('deoplete#source#vim_lsp#_request_id', 0)
+
     def call(self, name, *args):
         if name == 'lsp#get_allowed_servers':
             return ['test']

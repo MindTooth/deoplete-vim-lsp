@@ -69,8 +69,9 @@ class Source(Base):
         return []
 
     def clean_state(self):
-        self.vim.vars['deoplete#source#vim_lsp#_request_id'] = self.vim.vars.get(
-            'deoplete#source#vim_lsp#_request_id', 0) + 1
+        # Vim's RPC adapter does not turn a missing global into a Python KeyError.
+        self.vim.vars['deoplete#source#vim_lsp#_request_id'] = self.vim.eval(
+            "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)") + 1
         self.vim.vars['deoplete#source#vim_lsp#_items'] = []
         self.vim.vars['deoplete#source#vim_lsp#_done'] = False
         self.vim.vars['deoplete#source#vim_lsp#_incomplete'] = False
