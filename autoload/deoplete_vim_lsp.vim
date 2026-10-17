@@ -14,6 +14,8 @@ function! deoplete_vim_lsp#request(server_name, complete_position, request_id) a
         \ 'position': lsp#get_position(),
         \ 'complete_position': a:complete_position,
         \ 'input': strpart(getline('.'), 0, col('.') - 1),
+        \ 'changedtick': b:changedtick,
+        \ 'lines': getline(1, '$'),
         \ }
     call timer_stop(s:timer)
     let s:timer = timer_start(1000, function('s:finish_request', [a:request_id, [], 1]))
@@ -46,15 +48,29 @@ function! s:handle_completion(server, request, data) abort
     if a:request.id != g:deoplete#source#vim_lsp#_request_id
         return
     endif
-    if a:request.bufnr != bufnr('%') || a:request.position.line != line('.') - 1
-        \ || stridx(strpart(getline('.'), 0, col('.') - 1), a:request.input) != 0
-        \ || lsp#client#is_error(a:data) || !has_key(a:data, 'response')
-        \ || !has_key(a:data.response, 'result')
-        call s:finish_request(a:request.id, [], 1)
-        return
-    endif
-
     try
+        if a:request.bufnr != bufnr('%') || a:request.position.line != line('.') - 1
+            \ || stridx(strpart(getline('.'), 0, col('.') - 1), a:request.input) != 0
+            \ || lsp#client#is_error(a:data) || !has_key(a:data, 'response')
+            \ || !has_key(a:data.response, 'result')
+            call s:finish_request(a:request.id, [], 1)
+            return
+        endif
+        if b:changedtick != a:request.changedtick
+            " Permit prefix growth, but reject changes anywhere else in the buffer.
+            let l:lines = getline(1, '$')
+            let l:lines[line('.') - 1] = a:request.input . strpart(getline('.'), col('.') - 1)
+            if l:lines !=# a:request.lines
+                call s:finish_request(a:request.id, [], 1)
+                return
+            endif
+        endif
+        let l:result = a:data.response.result
+        if l:result isnot v:null && type(l:result) != type([])
+            \ && (type(l:result) != type({}) || type(get(l:result, 'items', v:null)) != type([]))
+            call s:finish_request(a:request.id, [], 1)
+            return
+        endif
         let l:options = {
             \ 'server': a:server,
             \ 'position': a:request.position,

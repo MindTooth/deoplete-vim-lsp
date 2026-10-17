@@ -32,6 +32,13 @@ The Vim test starts without a request-ID global, covering initialization through
 the actual Vim RPC adapter. Existing bridge conversion and request-state fixtures
 remain in `test_bridge.vim`.
 
+Request-state regressions cover duplicate and out-of-order callbacks, cancellation,
+buffer switches, timeout/response ordering, malformed envelopes and results, and
+conversion exceptions. Each failed bridge request is followed by a successful
+request. Source tests check retry timing and invalidation of both pending and
+cached results. Changed ticks reject edits on other lines or after the cursor,
+while multiple edits that only grow the prefix remain reusable.
+
 The built-in vim-lsp snippet expander is covered. External snippet engines and
 their jump mappings, supplementary Unicode characters requiring UTF-16 surrogate
 pairs, differing `filterText`/inserted-text prefixes, multiple simultaneous

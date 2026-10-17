@@ -13,7 +13,7 @@ function! s:request(position, complete_position) abort
   let g:deoplete#source#vim_lsp#_done = 0
   let g:deoplete#source#vim_lsp#_items = []
   let g:deoplete#source#vim_lsp#_incomplete = 0
-  return {'id': g:deoplete#source#vim_lsp#_request_id, 'bufnr': bufnr('%'), 'position': a:position, 'complete_position': a:complete_position, 'input': strpart(getline('.'), 0, col('.') - 1)}
+  return {'id': g:deoplete#source#vim_lsp#_request_id, 'bufnr': bufnr('%'), 'position': a:position, 'complete_position': a:complete_position, 'input': strpart(getline('.'), 0, col('.') - 1), 'changedtick': b:changedtick, 'lines': getline(1, '$')}
 endfunction
 
 function! s:check(line, edit_start, request_col, keyword_byte, expected, incomplete, ...) abort
@@ -119,6 +119,141 @@ call setline(1, 'prin ')
 call cursor(1, 5)
 call s:Handler(lsp#get_server_info('test'), s:pending, {'response': {'result': [{'label': 'print'}]}})
 call assert_equal('print', g:deoplete#source#vim_lsp#_items[0].word)
+
+" Capture real request closures for lifecycle regressions, including duplicate delivery.
+function! s:start() abort
+  let request = s:request({'line': line('.') - 1, 'character': col('.') - 1}, 0)
+  call deoplete_vim_lsp#request('test', 0, request.id)
+  return g:test_lsp_requests[-1].on_notification
+endfunction
+
+function! s:success(Callback, label) abort
+  call call(a:Callback, [{'response': {'result': [{'label': a:label}]}}])
+endfunction
+
+function! s:recovered() abort
+  let Callback = s:start()
+  call s:success(Callback, 'recovered')
+  call assert_equal('recovered', g:deoplete#source#vim_lsp#_items[0].word)
+  let generation = g:deoplete#source#vim_lsp#_request_id
+  call s:success(Callback, 'duplicate')
+  call assert_equal('recovered', g:deoplete#source#vim_lsp#_items[0].word)
+  call assert_equal(generation, g:deoplete#source#vim_lsp#_request_id)
+endfunction
+
+" Editing elsewhere must invalidate even when the completion prefix also grows.
+for grow in [0, 1]
+  call setline(1, ['header', 'pri tail'])
+  call cursor(2, 4)
+  let s:Callback = s:start()
+  call setline(1, 'changed header')
+  if grow
+    call setline(2, 'prin tail')
+    call cursor(2, 5)
+  endif
+  call s:success(s:Callback, 'stale')
+  call assert_equal([], g:deoplete#source#vim_lsp#_items)
+  call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete)
+  call s:recovered()
+endfor
+
+" Prefix replacement, deletion, line changes, and edits after the cursor are stale.
+for change in ['replace', 'delete', 'line', 'tail']
+  call setline(1, ['header', 'pri tail'])
+  call cursor(2, 4)
+  let s:Callback = s:start()
+  if change ==# 'line'
+    call cursor(1, 4)
+  else
+    call setline(2, change ==# 'replace' ? 'pro tail' : change ==# 'delete' ? 'pr tail' : 'pri changed tail')
+    call cursor(2, change ==# 'delete' ? 3 : 4)
+  endif
+  call s:success(s:Callback, 'stale')
+  call assert_equal([], g:deoplete#source#vim_lsp#_items, change)
+  call assert_equal(1, g:deoplete#source#vim_lsp#_done, change)
+  call s:recovered()
+endfor
+
+" Multiple edits growing a prefix (also multibyte) must not fail a strict tick check.
+for prefix in ['pri', 'pré']
+  call setline(1, ['header', prefix . ' tail'])
+  call cursor(2, strlen(prefix) + 1)
+  let s:Callback = s:start()
+  for suffix in ['n', 'nt']
+    call setline(2, prefix . suffix . ' tail')
+    call cursor(2, strlen(prefix . suffix) + 1)
+  endfor
+  call s:success(s:Callback, 'print')
+  call assert_equal('print', g:deoplete#source#vim_lsp#_items[0].word)
+endfor
+
+" Bad envelopes must finish immediately, and bad results must remain retryable.
+for data in [v:null, [], {}, {'response': v:null}, {'response': []},
+      \ {'response': {'result': 42}}, {'response': {'result': 'invalid'}},
+      \ {'response': {'result': {'items': {}, 'isIncomplete': v:false}}},
+      \ {'response': {'result': {'items': []}}},
+      \ {'response': {'result': [{'textEdit': {}}]}},
+      \ {'response': {'error': {'code': -32800, 'message': 'cancelled'}}}]
+  let s:Callback = s:start()
+  let s:threw = ''
+  try
+    call call(s:Callback, [data])
+  catch
+    let s:threw = v:exception
+  endtry
+  call assert_equal('', s:threw, string(data))
+  call assert_equal(1, g:deoplete#source#vim_lsp#_done, string(data))
+  call assert_equal([], g:deoplete#source#vim_lsp#_items, string(data))
+  call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete, string(data))
+  call s:recovered()
+  call s:success(s:Callback, 'failed_request_replayed')
+  call assert_equal('recovered', g:deoplete#source#vim_lsp#_items[0].word)
+endfor
+
+" A null result is valid LSP, unlike a malformed result.
+let s:Callback = s:start()
+call call(s:Callback, [{'response': {'result': v:null}}])
+call assert_equal(1, g:deoplete#source#vim_lsp#_done)
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call assert_equal(0, g:deoplete#source#vim_lsp#_incomplete)
+
+" Cancellation invalidates ownership even when no replacement has started yet.
+let s:Callback = s:start()
+let s:cancelled_id = g:deoplete#source#vim_lsp#_request_id
+let g:deoplete#source#vim_lsp#_request_id += 1
+call s:success(s:Callback, 'cancelled')
+call assert_equal(0, g:deoplete#source#vim_lsp#_done)
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call s:recovered()
+
+" A pending request must not publish into another buffer, even before BufEnter is processed.
+let s:Callback = s:start()
+noautocmd new
+call setline(1, 'pri ')
+call cursor(1, 4)
+call s:success(s:Callback, 'wrong_buffer')
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call assert_equal(1, g:deoplete#source#vim_lsp#_done)
+call s:recovered()
+
+" Fire the timeout immediately before its response, then replay it after a newer request.
+let s:Finish = function('<SNR>' . s:script.sid . '_finish_request')
+let s:Callback = s:start()
+let s:expired_id = g:deoplete#source#vim_lsp#_request_id
+call s:Finish(s:expired_id, [], 1)
+call s:success(s:Callback, 'late')
+call assert_equal([], g:deoplete#source#vim_lsp#_items)
+let s:NewCallback = s:start()
+let s:timers = map(timer_info(), 'v:val.id')
+call s:Finish(s:expired_id, [], 1)
+call s:success(s:Callback, 'late')
+call assert_equal(0, g:deoplete#source#vim_lsp#_done)
+call assert_equal(s:timers, map(timer_info(), 'v:val.id'))
+call s:success(s:NewCallback, 'newest')
+call assert_equal('newest', g:deoplete#source#vim_lsp#_items[0].word)
+call s:Finish(s:expired_id, [], 1)
+call assert_equal('newest', g:deoplete#source#vim_lsp#_items[0].word)
+call s:recovered()
 
 if !empty(v:errors)
   call writefile(v:errors, $LAB . '/bridge-errors.txt')

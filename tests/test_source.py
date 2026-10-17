@@ -18,6 +18,7 @@ class Vim:
         self.vars = {'deoplete#sources#vim_lsp#log': ''}
         self.requests = []
         self.triggers = ['"', ':', '[', '.']
+        self.lines = ['']
 
     def eval(self, expression):
         assert expression == "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)"
@@ -36,12 +37,15 @@ class Vim:
             return {'auto_complete': True, 'auto_complete_popup': 'auto'}[args[0]]
         if name == 'getbufvar':
             return 0
+        if name == 'getbufline':
+            return self.lines.copy()
 
 
-def context(text, line=1, bufnr=1):
+def context(text, line=1, bufnr=1, changedtick=1):
     return {'input': text, 'position': [0, line, len(text)+1, 0],
             'complete_position': re.search(r'\w*$|$', text).start(),
-            'bufnr': bufnr, 'filetypes': ['json'], 'event': 'TextChangedI'}
+            'bufnr': bufnr, 'changedtick': changedtick,
+            'filetypes': ['json'], 'event': 'TextChangedI'}
 
 
 class SourceTests(unittest.TestCase):
@@ -86,14 +90,19 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(len(self.vim.requests), 2)
 
     def test_buffer_entry_clears_items_and_invalidates_pending_request(self):
-        self.source.gather_candidates(context('pri'))
-        request_id = self.vim.requests[-1][-1]
-        self.respond()
-        self.source.on_event({'event': 'BufEnter'})
-        self.assertEqual(self.vim.vars['deoplete#source#vim_lsp#_items'], [])
-        self.assertGreater(self.vim.vars['deoplete#source#vim_lsp#_request_id'], request_id)
-        self.assertEqual(self.source.gather_candidates(context('pri', bufnr=2)), [])
-        self.assertEqual(len(self.vim.requests), 2)
+        for completed in [False, True]:
+            with self.subTest(completed=completed):
+                self.source.clean_state()
+                self.vim.requests.clear()
+                self.source.gather_candidates(context('pri'))
+                request_id = self.vim.requests[-1][-1]
+                if completed:
+                    self.respond()
+                self.source.on_event({'event': 'BufEnter'})
+                self.assertEqual(self.vim.vars['deoplete#source#vim_lsp#_items'], [])
+                self.assertGreater(self.vim.vars['deoplete#source#vim_lsp#_request_id'], request_id)
+                self.assertEqual(self.source.gather_candidates(context('pri', bufnr=2)), [])
+                self.assertEqual(len(self.vim.requests), 2)
 
     def test_buffer_identity_prevents_reuse_without_event(self):
         self.source.gather_candidates(context('pri'))
@@ -118,6 +127,50 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(len(self.vim.requests), 1)
         self.assertEqual(self.source.gather_candidates(context('prin')), [])
         self.assertEqual(len(self.vim.requests), 2)
+
+    def test_changedtick_preserves_only_prefix_growth(self):
+        for completed in [False, True]:
+            for lines, text, compatible in [
+                    (['header', 'prin tail'], 'prin', True),
+                    (['changed header', 'pri tail'], 'pri', False),
+                    (['changed header', 'prin tail'], 'prin', False),
+                    (['header', 'prin changed tail'], 'prin', False)]:
+                with self.subTest(completed=completed, lines=lines):
+                    self.source.clean_state()
+                    self.vim.lines = ['header', 'pri tail']
+                    self.source.gather_candidates(context('pri', line=2))
+                    request_id = self.vim.requests[-1][-1]
+                    if completed:
+                        self.respond()
+                    self.vim.lines = lines
+                    result = self.source.gather_candidates(
+                        context(text, line=2, changedtick=3))
+                    self.assertEqual(self.vim.requests[-1][-1] == request_id, compatible)
+                    self.assertEqual(bool(result), completed and compatible)
+
+    def test_failed_request_after_pending_growth_retries_immediately(self):
+        self.source.gather_candidates(context('pri'))
+        self.assertEqual(self.source.gather_candidates(context('prin')), [])
+        self.assertEqual(len(self.vim.requests), 1)
+        self.respond(incomplete=True)
+        self.vim.vars['deoplete#source#vim_lsp#_items'] = []
+        self.assertEqual(self.source.gather_candidates(context('prin')), [])
+        self.assertEqual(len(self.vim.requests), 2)
+        self.respond()
+        self.assertTrue(self.source.gather_candidates(context('prin')))
+
+    def test_clean_state_is_monotonic_and_clears_all_result_flags(self):
+        self.source.gather_candidates(context('pri'))
+        self.respond(incomplete=True)
+        request_id = self.vim.requests[-1][-1]
+        for _ in range(2):
+            self.source.clean_state()
+            self.assertGreater(self.vim.vars['deoplete#source#vim_lsp#_request_id'], request_id)
+            request_id = self.vim.vars['deoplete#source#vim_lsp#_request_id']
+            self.assertFalse(self.source.requested)
+            self.assertIsNone(self.source.requested_context)
+            for name in ['items', 'done', 'incomplete']:
+                self.assertFalse(self.vim.vars['deoplete#source#vim_lsp#_' + name])
 
     def test_real_deoplete_minimum_and_trigger_gate(self):
         child = SimpleNamespace(_vim=self.vim)
