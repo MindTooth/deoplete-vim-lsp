@@ -88,6 +88,12 @@ for data in [{'response': {'error': {'code': -32603, 'message': 'failed'}}}, {},
   call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete)
 endfor
 
+let g:deoplete#sources#vim_lsp#log = tempname()
+call s:Handler(lsp#get_server_info('test'), s:request({'line': 0, 'character': 3}, 0), {'response': {'error': {'code': -32603, 'message': 'failed'}}})
+call assert_match('completion error.*failed', join(readfile(g:deoplete#sources#vim_lsp#log)))
+call delete(g:deoplete#sources#vim_lsp#log)
+let g:deoplete#sources#vim_lsp#log = ''
+
 let s:pending = s:request({'line': 0, 'character': 3}, 0)
 call deoplete_vim_lsp#request('test', 0, s:pending.id)
 sleep 1100m
