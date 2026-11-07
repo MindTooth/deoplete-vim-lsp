@@ -20,6 +20,8 @@ class Vim:
         self.triggers = ['"', ':', '[', '.']
         self.context_matches = True
         self.context_checks = []
+        self.auto_complete = True
+        self.reply = None
 
     def eval(self, expression):
         assert expression == "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)"
@@ -34,8 +36,10 @@ class Vim:
             return {'completionProvider': {'triggerCharacters': self.triggers}}
         if name == 'deoplete_vim_lsp#request':
             self.requests.append(args)
+            if self.reply:
+                self.vars.update(self.reply)
         if name == 'deoplete#custom#_get_option':
-            return {'auto_complete': True, 'auto_complete_popup': 'auto'}[args[0]]
+            return {'auto_complete': self.auto_complete, 'auto_complete_popup': 'auto'}[args[0]]
         if name == 'getbufvar':
             return 0
         if name == 'deoplete_vim_lsp#matches_context':
@@ -198,6 +202,17 @@ class SourceTests(unittest.TestCase):
         self.assertRegex('fmt.', self.source.get_input_pattern('go'))
         self.source.on_event({'event': 'BufEnter'})
         self.assertNotRegex('fmt.', self.source.get_input_pattern('go'))
+
+    def test_manual_completion_waits_for_reply_then_times_out(self):
+        self.vim.auto_complete = False
+        self.vim.reply = {'deoplete#source#vim_lsp#_done': True,
+                          'deoplete#source#vim_lsp#_items': [{'word': 'print'}]}
+        ctx = context('pri')
+        self.assertEqual(self.source.gather_candidates(ctx), [{'word': 'print'}])
+        self.assertFalse(ctx['is_async'])
+        self.vim.reply = None
+        self.assertEqual(self.source.gather_candidates(context('pri')), [])
+        self.assertEqual(len(self.vim.requests), 2)
 
     def test_unadvertised_dot_and_pattern_override(self):
         self.vim.triggers = ['"', '[']
