@@ -69,8 +69,10 @@ function! s:finish_request(request_id, items, incomplete, ...) abort
     let g:deoplete#source#vim_lsp#_items = a:items
     let g:deoplete#source#vim_lsp#_incomplete = a:incomplete
     let g:deoplete#source#vim_lsp#_done = 1
-    " Invalidate this request so a response after timeout cannot revive it.
-    let g:deoplete#source#vim_lsp#_request_id += 1
+    " A timer call passes its timer ID: end the wait but let a slow reply publish once.
+    if !a:0
+        let g:deoplete#source#vim_lsp#_request_id += 1
+    endif
     if index(['i', 'ic', 'ix'], mode()) >= 0
         call deoplete#auto_complete()
     endif

@@ -95,7 +95,7 @@ call assert_equal(1, g:deoplete#source#vim_lsp#_done)
 call assert_equal([], g:deoplete#source#vim_lsp#_items)
 call assert_equal(1, g:deoplete#source#vim_lsp#_incomplete)
 call call(g:test_lsp_requests[-1].on_notification, [{'response': {'result': [{'label': 'too_late'}]}}])
-call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call assert_equal('too_late', g:deoplete#source#vim_lsp#_items[0].word)
 
 let s:pending = s:request({'line': 0, 'character': 3}, 0)
 noautocmd new
@@ -237,13 +237,15 @@ call assert_equal([], g:deoplete#source#vim_lsp#_items)
 call assert_equal(1, g:deoplete#source#vim_lsp#_done)
 call s:recovered()
 
-" Fire the timeout immediately before its response, then replay it after a newer request.
+" Fire the timeout before its response: the late reply publishes once, then is ignored.
 let s:Finish = function('<SNR>' . s:script.sid . '_finish_request')
 let s:Callback = s:start()
 let s:expired_id = g:deoplete#source#vim_lsp#_request_id
-call s:Finish(s:expired_id, [], 1)
+call s:Finish(s:expired_id, [], 1, 0)
 call s:success(s:Callback, 'late')
-call assert_equal([], g:deoplete#source#vim_lsp#_items)
+call assert_equal('late', g:deoplete#source#vim_lsp#_items[0].word)
+call s:success(s:Callback, 'duplicate')
+call assert_equal('late', g:deoplete#source#vim_lsp#_items[0].word)
 let s:NewCallback = s:start()
 let s:timers = map(timer_info(), 'v:val.id')
 call s:Finish(s:expired_id, [], 1)
