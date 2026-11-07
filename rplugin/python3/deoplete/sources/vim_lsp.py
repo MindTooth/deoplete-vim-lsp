@@ -29,6 +29,8 @@ class Source(Base):
     def on_event(self, context):
         if context['event'] == 'BufEnter':
             self.buf_changed = True
+            # Refetch so a restarted server's trigger characters take effect.
+            self.server_capabilities = {}
             self.clean_state()
 
     def get_input_pattern(self, filetype):

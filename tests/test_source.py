@@ -192,6 +192,13 @@ class SourceTests(unittest.TestCase):
                 ctx = dict(context(text), complete_str=prefix)
                 self.assertEqual(Child._is_skip(child, ctx, self.source), expected, (minimum, text))
 
+    def test_buffer_entry_refetches_server_capabilities(self):
+        self.assertRegex('fmt.', self.source.get_input_pattern('go'))
+        self.vim.triggers = ['"']
+        self.assertRegex('fmt.', self.source.get_input_pattern('go'))
+        self.source.on_event({'event': 'BufEnter'})
+        self.assertNotRegex('fmt.', self.source.get_input_pattern('go'))
+
     def test_unadvertised_dot_and_pattern_override(self):
         self.vim.triggers = ['"', '[']
         self.assertNotRegex('fmt.', self.source.get_input_pattern('go'))
