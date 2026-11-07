@@ -37,10 +37,11 @@ class Source(Base):
 
         triggers = []
         for server_name in self.vim.call('lsp#get_allowed_servers'):
-            if self.vim.call('lsp#get_server_status', server_name) != 'running':
-                continue
-            self.server_capabilities[server_name] = self.vim.call(
-                'lsp#get_server_capabilities', server_name)
+            if server_name not in self.server_capabilities:
+                if self.vim.call('lsp#get_server_status', server_name) != 'running':
+                    continue
+                self.server_capabilities[server_name] = self.vim.call(
+                    'lsp#get_server_capabilities', server_name)
             triggers.extend(self.trigger_characters(server_name))
 
         if not triggers:
