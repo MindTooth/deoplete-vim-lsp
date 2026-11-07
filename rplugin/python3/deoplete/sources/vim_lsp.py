@@ -15,6 +15,10 @@ class Source(Base):
         self.events = ['BufEnter']
         self.vars = {}
 
+        # Continue from the editor's ID so a restarted source cannot reuse a pending one.
+        # Vim's RPC adapter does not turn a missing global into a Python KeyError.
+        self.request_id = self.vim.eval(
+            "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)")
         self.clean_state()
 
         self.server_names = None
@@ -69,17 +73,14 @@ class Source(Base):
         return []
 
     def clean_state(self):
-        # Vim's RPC adapter does not turn a missing global into a Python KeyError.
-        request_id = self.vim.eval(
-            "get(g:, 'deoplete#source#vim_lsp#_request_id', 0)") + 1
-        self.vim.vars['deoplete#source#vim_lsp#_request_id'] = request_id
+        self.request_id += 1
+        self.vim.vars['deoplete#source#vim_lsp#_request_id'] = self.request_id
         self.vim.vars['deoplete#source#vim_lsp#_items'] = []
         self.vim.vars['deoplete#source#vim_lsp#_done'] = False
         self.vim.vars['deoplete#source#vim_lsp#_incomplete'] = False
         self.requested = False
         self.requested_context = None
         self.vim.call('deoplete_vim_lsp#clear')
-        return request_id
 
     def sync_completion(self, server_name, context):
         self.request_lsp_completion(server_name, context)
@@ -121,14 +122,14 @@ class Source(Base):
     def request_lsp_completion(self, server_name, context):
         self.log('request completion')
 
-        request_id = self.clean_state()
+        self.clean_state()
         self.requested = True
         self.requested_context = context
         self.vim.call(
             'deoplete_vim_lsp#request',
             server_name,
             context['complete_position'],
-            request_id,
+            self.request_id,
         )
 
     def is_auto_complete(self):

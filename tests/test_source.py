@@ -108,6 +108,12 @@ class SourceTests(unittest.TestCase):
                 self.assertEqual(self.source.gather_candidates(context('pri', bufnr=2)), [])
                 self.assertEqual(len(self.vim.requests), 2)
 
+    def test_restarted_source_continues_request_ids(self):
+        self.source.gather_candidates(context('pri'))
+        request_id = self.vim.requests[-1][-1]
+        module.Source(self.vim).gather_candidates(context('pri'))
+        self.assertGreater(self.vim.requests[-1][-1], request_id)
+
     def test_buffer_identity_prevents_reuse_without_event(self):
         self.source.gather_candidates(context('pri'))
         self.respond()
