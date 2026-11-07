@@ -121,26 +121,11 @@ and failure for both pending and cached results without fetching buffer lines.
 Validation passed: **13 source tests, 10 Neovim acceptance tests, and 1 Vim
 acceptance test (24 total, no skips)**; expanded bridge fixtures in both editors;
 and `git diff --check`. The Vim acceptance test exercised the real Vim RPC adapter.
-The initial development-profile wrapper loaded a cached duplicate Deoplete
-manifest; clean editor paths avoided that contamination. Native Vim also required
-pynvim on its embedded Python path and local-socket access.
+Native Vim required pynvim on its embedded Python path and local-socket access.
 
-Exact session regression commands (the dependency directory has symlinks to the
-four dependencies described in `tests/README.md`):
+Regression commands are in `tests/README.md`.
 
-```sh
-export LAB=/workspace/scratch/review-lab
-export NVIM=/workspace/.deoplete-env/nvim-linux-x86_64/bin/nvim
-export VIM_BIN=/workspace/scratch/vim-clean
-export PATH=/workspace/.deoplete-env/nvim-linux-x86_64/bin:$PATH
-export PYTHONPATH=/workspace/.deoplete-env/venv/lib/python3.12/site-packages:/workspace/.deoplete-env/deps/deoplete.nvim/rplugin/python3
-/workspace/.deoplete-env/venv/bin/python -m unittest discover -s tests -v
-"$NVIM" -u NONE -i NONE --headless -n -S tests/test_bridge.vim
-"$VIM_BIN" -Nu NONE -i NONE -n -es -S tests/test_bridge.vim
-git diff --check
-```
-
-The repeatable benchmark and machine-readable results accompany this change.
+The repeatable benchmark accompanies this change.
 Remaining costs are the one exact snapshot,
 linear local comparisons, and existing source RPC housekeeping. Further caching
 or incremental buffer tracking would add state and complexity beyond the measured

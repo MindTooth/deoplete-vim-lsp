@@ -3,9 +3,9 @@ Run `snapshots.py` with Python plus pynvim and a dependency directory containing
 plugin configuration is used. On Linux it also reports the editor's RSS.
 
 ```sh
-export LAB=/workspace/.deoplete-env/deps
-export NVIM=/workspace/.deoplete-env/nvim-linux-x86_64/bin/nvim
-PY=/workspace/.deoplete-env/venv/bin/python
+export LAB=/path/to/dependencies
+export NVIM=/path/to/nvim
+PY=/path/to/python
 
 "$PY" benchmarks/snapshots.py --samples 100 > /tmp/optimized.json
 
@@ -18,14 +18,11 @@ git archive 01c80c3 | tar -x -C "$BENCH_DIR/pre"
 "$PY" benchmarks/snapshots.py --samples 100 --root "$BENCH_DIR/pre" > /tmp/pre.json
 
 # Native Vim primitives; JSON contains individual samples in seconds.
-OUT=/tmp/vim-primitives.json /workspace/scratch/vim-clean \
+OUT=/tmp/vim-primitives.json vim \
   -Nu NONE -i NONE -n -es -S benchmarks/primitives.vim
 ```
 
-Replace these session-specific executable/dependency paths as needed. The native
-Vim command can use an ordinary `vim`; this session's `vim-clean` wrapper selects
-the extracted Vim AppImage and its matching Python library without loading the
-development profile. Run revisions sequentially on an otherwise idle machine.
+Run revisions sequentially on an otherwise idle machine.
 `--lines 100 10000 100000` selects buffer sizes; these are also the defaults.
 
 Buffers contain distinct, approximately 81-byte ASCII JSON-like lines, with
@@ -59,5 +56,4 @@ transport buffers, and allocator overhead. The optimized implementation retains
 one Vim snapshot for the active/cached context; obsolete callback dictionaries
 retain no buffer lines.
 
-Measured results and the decision are in [REPORT.md](REPORT.md); machine-readable
-measurements are in [results/](results/).
+Measured results and the decision are in [REPORT.md](REPORT.md).
