@@ -83,9 +83,7 @@ function! s:handle_completion(server, request, data) abort
         return
     endif
     try
-        if a:request.bufnr != bufnr('%') || a:request.position.line != line('.') - 1
-            \ || stridx(strpart(getline('.'), 0, col('.') - 1), a:request.input) != 0
-            \ || !has_key(a:data, 'response') || !has_key(a:data.response, 'result')
+        if !has_key(a:data, 'response') || !has_key(a:data.response, 'result')
             if lsp#client#is_error(get(a:data, 'response', {}))
                 call deoplete_vim_lsp#log('completion error', a:data.response)
             endif
