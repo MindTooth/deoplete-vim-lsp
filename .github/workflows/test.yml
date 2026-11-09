@@ -3,8 +3,6 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      LAB: ${{ runner.temp }}/lab
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -15,6 +13,8 @@ jobs:
           neovim: true
       - name: Install dependencies
         run: |
+          LAB=$RUNNER_TEMP/lab
+          echo "LAB=$LAB" >> "$GITHUB_ENV"
           pip install pynvim
           git clone --depth 1 https://github.com/Shougo/deoplete.nvim "$LAB/deoplete.nvim"
           git clone --depth 1 https://github.com/prabirshrestha/vim-lsp "$LAB/vim-lsp"
