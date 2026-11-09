@@ -1,0 +1,24 @@
+name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      LAB: ${{ runner.temp }}/lab
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+      - name: Install dependencies
+        run: |
+          pip install pynvim
+          git clone --depth 1 https://github.com/Shougo/deoplete.nvim "$LAB/deoplete.nvim"
+          git clone --depth 1 https://github.com/prabirshrestha/vim-lsp "$LAB/vim-lsp"
+      - name: Source and acceptance tests
+        run: PYTHONPATH="$LAB/deoplete.nvim/rplugin/python3" python -m unittest discover -s tests -v
+      - name: Bridge tests
+        run: nvim -u NONE -i NONE --headless -n -S tests/test_bridge.vim || { cat "$LAB/bridge-errors.txt"; exit 1; }
