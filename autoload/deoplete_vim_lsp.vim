@@ -60,7 +60,6 @@ function! s:is_current(request) abort
 endfunction
 
 function! deoplete_vim_lsp#matches_context() abort
-    call deoplete_vim_lsp#log('DIAG vim', empty(s:request), b:changedtick, get(s:request, 'changedtick', -1), getline(1, '$'), get(s:request, 'lines', []), get(s:request, 'input', ''), mode(), col('.'))
     return !empty(s:request) && s:is_current(s:request)
 endfunction
 
