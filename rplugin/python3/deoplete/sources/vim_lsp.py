@@ -139,6 +139,7 @@ class Source(Base):
 
     def match_context(self, context):
         before_context = self.requested_context
+        self.log(str(['DIAG enter', bool(before_context), context['input'], context['changedtick'], context['event']]))
         if not before_context:
             return False
         if context['bufnr'] != before_context['bufnr']:
@@ -181,5 +182,7 @@ class Source(Base):
             return False
         if context['changedtick'] != before_context['changedtick']:
             # Typing changes the tick too; the bridge checks the rest of the buffer.
-            return bool(self.vim.call('deoplete_vim_lsp#matches_context'))
+            r = bool(self.vim.call('deoplete_vim_lsp#matches_context'))
+            self.log(str(['DIAG tick', before_context['changedtick'], context['changedtick'], r, context['event']]))
+            return r
         return True

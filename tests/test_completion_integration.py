@@ -216,11 +216,13 @@ class CompletionIntegrationTests(unittest.TestCase):
         self.popup(item['label'])
         requests = len(self.requests('textDocument/completion'))
         self.nvim.current.buffer[0] = 'manual'
+        dlog = self.directory / 'diag.log'
+        self.nvim.vars['deoplete#sources#vim_lsp#log'] = str(dlog)
         self.type('m', '  "m')
         self.popup(item['label'])
         fresh = self.requests('textDocument/completion')[requests:]
         self.assertEqual([r['params']['position']['character'] for r in fresh], ['diag'],
-                         self.nvim.command_output('messages'))
+                         dlog.read_text())
 
     def test_mixed_replacement_starts(self):
         items = [{'label': 'red', 'textEdit': edit(0, 2, 'red')},
