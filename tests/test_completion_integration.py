@@ -218,7 +218,9 @@ class CompletionIntegrationTests(unittest.TestCase):
         self.nvim.current.buffer[0] = 'manual'
         self.type('m', '  "m')
         self.popup(item['label'])
-        self.assertEqual(len(self.requests('textDocument/completion')), requests + 1)
+        fresh = self.requests('textDocument/completion')[requests:]
+        self.assertEqual([r['params']['position']['character'] for r in fresh], ['diag'],
+                         self.nvim.command_output('messages'))
 
     def test_mixed_replacement_starts(self):
         items = [{'label': 'red', 'textEdit': edit(0, 2, 'red')},
